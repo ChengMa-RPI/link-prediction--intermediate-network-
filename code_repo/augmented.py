@@ -885,8 +885,12 @@ cutoff = 0
 
 
 """produce results"""
+### whether to use weighted or unweighted method
 weights = 'weighted'
 weights = 'unweighted'
+
+### index_range: snapshots index
+### intermediate_range: the number of edges added to intermediate network
 # figure 5
 dataset = 'DBLP'
 index_range = np.arange(0, 5, 1)
