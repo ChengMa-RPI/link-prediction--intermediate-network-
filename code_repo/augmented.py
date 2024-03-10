@@ -9,6 +9,8 @@ import time
 import collections
 import multiprocessing as mp
 from numpy import linalg as LA  
+import logging
+import pprint
 
 marker = itertools.cycle(('d', 'v', 'o', '*'))
 linestyle = itertools.cycle(('-', '-', '-.', '-.', '--', '--', ':', ':')) 
@@ -765,9 +767,31 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
         total_num, node_list, neighbor_list, pair_list = original_construct(dataset, co)
     elif dataset == 'Caviar':
         total_num, node_list, neighbor_list, pair_list = load_caviar()
+        # logging.info(f'After load_caviar()\n\ntotal_num:\n{total_num}\n\nnode_list:\n{pprint.pformat(node_list)}\n\n'
+        #              f'neighbor_list\n{pprint.pformat(neighbor_list)}\n\npair_list\n{pprint.pformat(pair_list)}\n')
     elif dataset == 'email':
         total_num, node_list, neighbor_list, pair_list = load_email()
 
+    pair_list_extended = []
+    # Added by Konstantin Kuzmin
+    for idx in range(len(pair_list) - 1, -1, -1):
+        pair_list_extended.append(dict())
+    for idx1 in range(len(pair_list) - 1, -1, -1):
+        for pair in pair_list[idx1]:
+            if idx1 == len(pair_list) - 1:
+                assert pair not in pair_list_extended[idx1]
+                pair_list_extended[idx1][pair] = 1
+                for idx2 in range(idx1):
+                    assert pair not in pair_list_extended[idx2]
+                    pair_list_extended[idx2][pair] = 2
+            else:
+                if pair not in pair_list_extended[idx1]:
+                    pair_list_extended[idx1][pair] = 1
+                    for idx2 in range(idx1):
+                        pair_list_extended[idx2][pair] = 2
+                    for idx2 in range(idx1 + 1, len(pair_list)):
+                        pair_list_extended[idx2][pair] = 0
+    # End of added by Konstantin Kuzmin
     mapping = node_age(node_list)
     for index, i in zip(index_range, range(np.size(index_range))):
         neighbor_index = neighbor_list[:index+1]
@@ -783,12 +807,18 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
         neighbor_future = neighbor_list[:future_index]
         pair_future = pair_list[:future_index]
         pair_set_future = set()
-        for pair_i in pair_future:
-            pair_set_future = pair_i.union(pair_set_future)
+        # Commented out by Konstantin Kuzmin
+        # for pair_i in pair_future:
+        #     pair_set_future = pair_i.union(pair_set_future)
+        # End of commented out by Konstantin Kuzmin
+        # Added by Konstantin Kuzmin
+        pair_set_future = set([key for key in pair_list_extended[index] if pair_list_extended[index][key] == 2])
+        # End of added by Konstantin Kuzmin
         CN_dict, CN_info, top_edge, CN_exist_dict, CN_exist_info, top_exist_edge = coauthor_CN(index, mapping, neighbor_index, pair_set, weights, age_effect, False)
         for intermediate_num, j in zip(intermediate_range, range(np.size(intermediate_range))):
             t1 = time.time()
             CN_dict, CN_pair, intermediate_pair_set, intermediate_neighbor_list = augmented(index, mapping, neighbor_index, top_edge, pair_set, intermediate_num, weights, age_effect)
+            # logging.info(f'Calling AUC({id(pair_set_future)}, {id(pair_set)}, {id(node_index)}, {id(CN_dict)}, {id(CN_pair)}, {id(interval)}, {id(auc_method)}')
             auc[i, j] = AUC(pair_set_future, pair_set, node_index, CN_dict, CN_pair, interval, auc_method)
             t2 = time.time()
             print(i, j, t2-t1)
@@ -821,8 +851,10 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
 
 
 
-
-
+# Added by Konstantin Kuzmin
+# logging.basicConfig(filename='debug.log', filemode='w', level=logging.INFO,
+#                     format='%(name)s - %(levelname)s - %(message)s')
+# End of added by Konstantin Kuzmin
 
 
 ticksize = 15
@@ -914,6 +946,7 @@ intermediate_range = np.arange(0, 100, 1)
 dataset = 'Caviar'
 index_range = np.arange(0, 9, 1)
 intermediate_range = np.arange(0, 100, 1)
+#intermediate_range = np.arange(0, 100, 20)
 
 auc = intermediate_auc(dataset, co, index_range, weights, intermediate_range, interval, auc_method, age_effect, cutoff)
 
