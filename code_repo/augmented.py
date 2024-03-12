@@ -12,6 +12,9 @@ from numpy import linalg as LA
 import logging
 import pprint
 
+class Dataset:
+    pass
+
 marker = itertools.cycle(('d', 'v', 'o', '*'))
 linestyle = itertools.cycle(('-', '-', '-.', '-.', '--', '--', ':', ':')) 
 linestyle = itertools.cycle(('-', '--')) 
@@ -346,6 +349,7 @@ def load_coauthor(dataset, co):
     :returns: TODO
 
     """
+    print(f'Starting load_coauthor()...')
     coauthorship = '../coauth-' + dataset + '-full/'
     #node_label = np.array(pd.read_csv(coauthorship + 'coauth-DBLP-full-node-labels.txt', header=None).iloc[:, 0])
     node_nverts = np.array(pd.read_csv(coauthorship + 'coauth-' + dataset + '-full-nverts.txt', header=None).iloc[:, 0])
@@ -367,7 +371,8 @@ def load_coauthor(dataset, co):
         time_length.append(np.size(time_index))
         time_order.extend(time_index)
     node_nverts_order = np.split(node_nverts_co[time_order], np.cumsum(time_length))[:-1] 
-    node_simplex_order = np.split(node_simplex_co[time_order], np.cumsum(time_length))[:-1] 
+    node_simplex_order = np.split(node_simplex_co[time_order], np.cumsum(time_length))[:-1]
+    print(f'Returning from load_coauthor()...')
     return time_start, time_end, node_nverts_order, node_simplex_order
 
 def terrorist(dataset):
@@ -479,15 +484,18 @@ def node_age(node_list):
     :returns: TODO
 
     """
+    print(f'Starting node_age() with nodelist of size {len(node_list)}...')
     age = []
     node_set = []
     for node_i, i in zip(node_list, range(len(node_list))):
         node_i = np.unique(node_i)
+        print(f'Processing step {i} out of {len(node_list)} (node_i size is {len(node_i)}) of node_simplex_select')
         for node in node_i:
             if node not in node_set:
                 node_set.append(node)
                 age.append(i)
     mapping = dict(zip(node_set, age))
+    print(f'Returning from node_age()...')
     return mapping
     
 def coauthor_CN(index, mapping, neighbor_list, pair_set, weights, age_effect, exist):
@@ -597,6 +605,7 @@ def original_construct(dataset, co):
     :returns: TODO
 
     """
+    print(f'Starting original_construct()...')
     if dataset == 'AE' or dataset == 'AQ' or dataset == 'CE' or dataset == 'Bali1' or dataset == 'Bali2':
         node_simplex_collection = terrorist(dataset)
         node_simplex_select = node_simplex_collection
@@ -613,7 +622,12 @@ def original_construct(dataset, co):
     pair_list = []
     node_list = []
 
-    for connection in node_simplex_select: 
+    ctr = 0
+    for connection in node_simplex_select:
+        ctr += 1
+        pct = float(ctr) / (len(node_simplex_select))
+        if int(pct * 100) % 10 == 0:
+            print(f'{pct * 100:.2f}% done going through node_simplex_select')
         neighbor_dict = coauthor_neighbor(connection)
         pair_i = coauthor_exist_edges(connection)
         # neighbor list grouped by timestamp.
@@ -622,6 +636,7 @@ def original_construct(dataset, co):
         node_i = list(neighbor_dict.keys())
         node_list.append(node_i)
 
+    print(f'Returning from original_construct()...')
     return total_num, node_list, neighbor_list, pair_list
 
 def load_SFI():
@@ -658,7 +673,7 @@ def augmented(index, mapping, neighbor_index, top_edge, pair_set, intermediate_n
 
     """
 
-
+    print(f'Starting augmented()..')
     "intermediate network"
     t1 = time.time()
     intermediate_pair_set = pair_set.union(set([tuple(i) for i in top_edge[:intermediate_num]]))
@@ -684,6 +699,7 @@ def augmented(index, mapping, neighbor_index, top_edge, pair_set, intermediate_n
     CN_unweighted = {x: len(y) for x, y in intermediate_CN_dict.items()}
     CN_pair = set(CN_unweighted.keys())
     t7 = time.time()
+    print(f'Returning from augmented()...')
     return CN_unweighted, CN_pair, intermediate_pair_set, intermediate_neighbor_list 
 
 def AUC(pair_set_future, pair_set, node_index, CN_dict, CN_pair, interval, auc_method):
@@ -693,6 +709,7 @@ def AUC(pair_set_future, pair_set, node_index, CN_dict, CN_pair, interval, auc_m
     :returns: TODO
 
     """
+    print(f'Starting AUC()...')
     "To see the new edges in the future "
     pair_new = pair_set_future - pair_set
     " pairs of nodes are grouped according to node index. e.g. [0: interval), [interval: interval*2), ..."
@@ -753,6 +770,7 @@ def AUC(pair_set_future, pair_set, node_index, CN_dict, CN_pair, interval, auc_m
     new_choose = np.random.choice(np.array(new_score), realization, p = p_new)
     non_choose = np.random.choice(np.array(non_score), realization, p = p_non)
     auc = (np.sum(new_choose - non_choose>0) + 0.5*np.sum(new_choose == non_choose))/realization
+    print(f'Returning from AUC()...')
     return auc
 
 def intermediate_auc(dataset, co, index_range, weights, intermediate_range, interval, auc_method, age_effect, cutoff):
@@ -762,6 +780,7 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
     :returns: TODO
 
     """
+    print(f'Starting intermediate_auc()...')
     auc = np.zeros((np.size(index_range), np.size(intermediate_range)))
     if dataset == 'AE' or dataset == 'AQ' or dataset == 'CE' or dataset == 'Bali1' or dataset == 'Bali2' or dataset == 'DBLP':
         total_num, node_list, neighbor_list, pair_list = original_construct(dataset, co)
@@ -772,27 +791,50 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
     elif dataset == 'email':
         total_num, node_list, neighbor_list, pair_list = load_email()
 
+    # pair_list_extended is a list containing an extended adjacency matrix for each snapshot
+    # An extended adjacency matrix is a dictionary of the form <a, b>: num
+    #   where a, b are nodes, so that <a, b> is an edge (also called a pair) and num is an integer, such that:
+    #   when num is 2: the edge is not present in the current snapshot but is present in at least one future snapshot
+    #   when num is 1: the edge is present in the current snapshot
+    #   when num is 0: the edge was present in earlier snapshots but is not present in either the current snapshot or
+    #   any future snapshots
     pair_list_extended = []
     # Added by Konstantin Kuzmin
+    ctr = 0.0
     for idx in range(len(pair_list) - 1, -1, -1):
         pair_list_extended.append(dict())
     for idx1 in range(len(pair_list) - 1, -1, -1):
+        ctr += 1.0
+        pct = ctr / (len(pair_list) - 1)
+        if int(pct * 100) % 20 == 0:
+            print(f'{pct * 100:.2f}% done building pair_list_extended')
+        # Going over all edges in the current snapshot
         for pair in pair_list[idx1]:
+            # Last snapshot is processed separately
             if idx1 == len(pair_list) - 1:
+                # Initially, there should be no edges in pair_list_extended[idx1] because it is initialized first
                 assert pair not in pair_list_extended[idx1]
+                # num is set to 1 for all edges that exist in the last snapshot and
+                # num is set to 2 for the same edges in all previous snapshots
                 pair_list_extended[idx1][pair] = 1
                 for idx2 in range(idx1):
                     assert pair not in pair_list_extended[idx2]
                     pair_list_extended[idx2][pair] = 2
             else:
+                # If an edge in the current snapshot is currently not in pair_list_extended[idx1]
                 if pair not in pair_list_extended[idx1]:
+                    # it is added to pair_list_extended[idx1] with num of 1
                     pair_list_extended[idx1][pair] = 1
+                    # The same edge is added to pair_list_extended for all earlier snapshots with num of 2
                     for idx2 in range(idx1):
                         pair_list_extended[idx2][pair] = 2
+                    # The same edge is added to pair_list_extended for all later snapshots with num of 0
                     for idx2 in range(idx1 + 1, len(pair_list)):
                         pair_list_extended[idx2][pair] = 0
+    print(f'Done building pair_list_extended.')
     # End of added by Konstantin Kuzmin
     mapping = node_age(node_list)
+    print(f'Done calling node_age().')
     for index, i in zip(index_range, range(np.size(index_range))):
         neighbor_index = neighbor_list[:index+1]
         pair_index = pair_list[:index+1]
@@ -812,6 +854,7 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
         #     pair_set_future = pair_i.union(pair_set_future)
         # End of commented out by Konstantin Kuzmin
         # Added by Konstantin Kuzmin
+        # The set of edges for verification consists of all pairs that will exist in some future snapshot
         pair_set_future = set([key for key in pair_list_extended[index] if pair_list_extended[index][key] == 2])
         # End of added by Konstantin Kuzmin
         CN_dict, CN_info, top_edge, CN_exist_dict, CN_exist_info, top_exist_edge = coauthor_CN(index, mapping, neighbor_index, pair_set, weights, age_effect, False)
@@ -841,21 +884,24 @@ def intermediate_auc(dataset, co, index_range, weights, intermediate_range, inte
     plt.yticks(fontsize=ticksize)
     plt.legend(fontsize=legendsize, loc='upper left', bbox_to_anchor=(0.93, 1.0), framealpha=0)
     plt.locator_params(axis='x', nbins=5)
-    #save_des = '../manuscript/manuscript090820/figure/'+ dataset + weights 
-    #plt.savefig(save_des+ '.svg', format="svg") 
-    #plt.savefig(save_des + '.png') 
+    #save_des = '../manuscript/manuscript090820/figure/'+ dataset + weights
+    save_des = '../images/' + dataset + weights
+    plt.savefig(save_des+ '.svg', format="svg")
+    plt.savefig(save_des + '.png')
 
-    #plt.close('all')
-    plt.show()
+    plt.close('all')
+    #plt.show()
+    print(f'Returning from intermediate_auc()...')
     return auc
 
 
 
 # Added by Konstantin Kuzmin
-# logging.basicConfig(filename='debug.log', filemode='w', level=logging.INFO,
-#                     format='%(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='debug.log', filemode='w', level=logging.INFO,
+                    format='%(name)s - %(levelname)s - %(message)s')
 # End of added by Konstantin Kuzmin
 
+datasets = {}
 
 ticksize = 15
 legendsize = 12
@@ -864,7 +910,7 @@ markersize = 8
 alpha_c = 0.8
 lw = 3
 
-dataset = 'terrorism'
+experiment = 'terrorism'
 co = 1  # the counted paper have more than one author.
 index = 2
 time_select = [1997, 2006]
@@ -876,38 +922,38 @@ n_set = np.arange(10, 100, 10)
 intermediate_range = np.arange(0, 20, 1)
 
 
-dataset = 'MAG-Geology'
+experiment = 'MAG-Geology'
 index_range = np.arange(0, 2, 1)
 
 
 
-dataset = 'message'
+experiment = 'message'
 index_range = np.arange(0, 8, 1)
 
 
 
 
 "data too small"
-dataset = 'Bali2'
+experiment = 'Bali2'
 index_range = np.arange(5, 11, 1)
 
 "not good"
-dataset = 'AE'
+experiment = 'AE'
 index_range = np.arange(1, 9, 1)
 
-dataset = 'MAG-History'
+experiment = 'MAG-History'
 index_range = np.arange(0, 10, 1)
 
 
-dataset = 'AQ'
+experiment = 'AQ'
 index_range = np.arange(0, 9, 1)
 
-dataset = 'MAG-Geology'
+experiment = 'MAG-Geology'
 index_range = np.arange(0, 5, 1)
 
-dataset = 'MAG-History'
+experiment = 'MAG-History'
 index_range = np.arange(0, 5, 1)
-dataset = 'SFI_coauthor'
+experiment = 'SFI_coauthor'
 index_range = np.arange(10, 30, 1)
 interval = 1000
 auc_method = 'BKS'
@@ -918,35 +964,78 @@ cutoff = 0
 
 """produce results"""
 ### whether to use weighted or unweighted method
-weights = 'weighted'
-weights = 'unweighted'
+# weights = 'weighted'
+# weights = 'unweighted'
 
 ### index_range: snapshots index
 ### intermediate_range: the number of edges added to intermediate network
-# figure 5
-dataset = 'DBLP'
-index_range = np.arange(0, 5, 1)
-intermediate_range = np.arange(0, 80000, 10000)
+# figure 5a
+experiment = 'DBLP5a'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'DBLP'
+datasets[experiment].index_range = np.arange(0, 5, 1)
+datasets[experiment].intermediate_range = np.arange(0, 80000, 10000)
+datasets[experiment].weights = 'unweighted'
+#
+# figure 5b
+experiment = 'DBLP5b'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'DBLP'
+datasets[experiment].index_range = np.arange(0, 5, 1)
+datasets[experiment].intermediate_range = np.arange(0, 80000, 10000)
+datasets[experiment].weights = 'weighted'
 
 # figure 3b
-dataset = 'Bali1'
-index_range = np.arange(9, 16, 1)
-intermediate_range = np.arange(0, 21, 1)
+experiment = 'Bali13b'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'Bali1'
+datasets[experiment].index_range = np.arange(9, 16, 1)
+datasets[experiment].intermediate_range = np.arange(0, 21, 1)
+datasets[experiment].weights = 'unweighted'
 
-dataset = 'CE'
-index_range = np.arange(6, 15, 1)
-intermediate_range = np.arange(0, 60, 1)
+# figure 3a
+experiment = 'CE3a'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'CE'
+datasets[experiment].index_range = np.arange(6, 15, 1)
+datasets[experiment].intermediate_range = np.arange(0, 60, 1)
+datasets[experiment].weights = 'unweighted'
 
-# figure 4
-dataset = 'email'
-index_range = np.arange(0, 8, 1)
-intermediate_range = np.arange(0, 100, 1)
+# # figure 4a
+experiment = 'email4a'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'email'
+datasets[experiment].index_range = np.arange(0, 8, 1)
+datasets[experiment].intermediate_range = np.arange(0, 100, 1)
+datasets[experiment].weights = 'unweighted'
 
-# figure 2
-dataset = 'Caviar'
-index_range = np.arange(0, 9, 1)
-intermediate_range = np.arange(0, 100, 1)
-#intermediate_range = np.arange(0, 100, 20)
+# figure 4b
+experiment = 'email4b'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'email'
+datasets[experiment].index_range = np.arange(0, 8, 1)
+datasets[experiment].intermediate_range = np.arange(0, 100, 1)
+datasets[experiment].weights = 'weighted'
 
-auc = intermediate_auc(dataset, co, index_range, weights, intermediate_range, interval, auc_method, age_effect, cutoff)
+# figure 2a
+experiment = 'Caviar2a'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'Caviar'
+datasets[experiment].index_range = np.arange(0, 9, 1)
+datasets[experiment].intermediate_range = np.arange(0, 100, 1)
+datasets[experiment].weights = 'unweighted'
+
+# figure 2b
+experiment = 'Caviar'
+datasets[experiment] = Dataset()
+datasets[experiment].dataset = 'Caviar'
+datasets[experiment].index_range = np.arange(0, 10, 1)
+datasets[experiment].intermediate_range = np.arange(0, 100, 1)
+datasets[experiment].weights = 'weighted'
+
+for experiment, params in datasets.items():
+    print(f'Starting {experiment}...')
+    auc = intermediate_auc(params.dataset, co, params.index_range, datasets[experiment].weights,
+                           params.intermediate_range, interval, auc_method, age_effect, cutoff)
+    print(f'Finished {experiment}.')
 
